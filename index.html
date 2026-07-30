@@ -1,0 +1,917 @@
+<meta charset="utf-8">
+<title>BEACON — Lumina Hollywood</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0A0E12; --panel:#10161C; --panel-2:#141C24; --line:#1E2A33; --line-soft:#162028;
+    --ink:#E8EEF2; --ink-2:#8FA3AD; --ink-3:#55676F;
+    --ready:#17A281; --notice:#BC8428; --turn:#4A90D9;
+    --ready-glow:#53E6C4; --occupied:#232E37;
+    --alert:#D95C4A;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","Menlo",monospace;
+    --sans:"Helvetica Neue",-apple-system,"Segoe UI",Arial,sans-serif;
+    --e-out:cubic-bezier(0,0,.2,1); --e-expo:cubic-bezier(.16,1,.3,1);
+    --e-inout:cubic-bezier(.65,0,.35,1); --e-in:cubic-bezier(.4,0,1,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;min-height:100vh}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--ready-glow);outline-offset:2px;border-radius:2px}
+  .mono{font-family:var(--mono)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- chrome ---------- */
+  .topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(10,14,18,.92);backdrop-filter:blur(6px);z-index:50}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand-mark{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.28em;color:var(--ink)}
+  .brand-mark b{color:var(--ready-glow);font-weight:700}
+  .brand-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;color:var(--ink-3);text-transform:uppercase}
+  .deploy{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .deploy .site{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--ink-2);text-transform:uppercase}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--ready-glow)}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--ready-glow);box-shadow:0 0 8px var(--ready-glow);animation:blink 2.2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  .clock{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+
+  .tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--bg);position:relative}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;padding:12px 20px 10px;color:var(--ink-3);margin-bottom:-1px;transition:color 120ms var(--e-out)}
+  .tab:hover{color:var(--ink-2)}
+  .tab[aria-selected="true"]{color:var(--ink)}
+  #tabIndicator{position:absolute;bottom:-1px;height:2px;background:var(--ready-glow);box-shadow:0 0 8px rgba(83,230,196,.5);transition:left 260ms var(--e-inout),width 260ms var(--e-inout)}
+  .screen{display:none;padding:20px 18px 40px;max-width:1240px;margin:0 auto}
+  .screen.active{display:block;animation:screenIn 240ms var(--e-out)}
+  @keyframes screenIn{from{opacity:0;transform:translateY(5px)}}
+
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+
+  /* ---------- HUD ---------- */
+  .hud-frame{position:relative;border:1px solid var(--line);border-radius:14px;background:
+    radial-gradient(120% 90% at 50% 8%,#0E141B 0%,var(--bg) 55%);
+    box-shadow:inset 0 0 80px rgba(0,0,0,.55);overflow:hidden}
+  .hud-frame::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:14px;
+    box-shadow:inset 0 0 120px 30px rgba(0,0,0,.5)}
+  .hud-head{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line-soft)}
+  .hud-head .sep{color:var(--ink-3)}
+  .sim-tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--ink-3);border:1px solid var(--line);padding:3px 8px;border-radius:3px;text-transform:uppercase}
+  .hud-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:0;min-height:520px}
+  @media (max-width:940px){.hud-grid{grid-template-columns:1fr}}
+  .hud-stage{position:relative;padding:34px 6px 0;display:flex;align-items:flex-end;justify-content:center}
+  .hud-stage svg{width:min(100%,560px);height:auto;display:block}
+  .compass{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:min(64%,420px);height:24px;overflow:hidden}
+  .c-tape{position:absolute;left:50%;top:0;height:100%;transition:transform 300ms var(--e-inout);will-change:transform}
+  .c-tick{position:absolute;top:15px;width:1px;height:4px;background:#233240}
+  .c-tick.major{top:11px;height:8px;background:var(--ink-3)}
+  .c-lbl{position:absolute;top:0;font-family:var(--mono);font-size:8.5px;color:var(--ink-3);letter-spacing:.1em;transform:translateX(-50%)}
+  .c-lbl.n{color:var(--ready-glow);font-weight:700}
+  .c-caret{position:absolute;left:50%;top:20px;width:0;height:0;border:4px solid transparent;border-bottom-color:var(--ready-glow);transform:translateX(-4px)}
+  .c-hdg{position:absolute;right:0;top:2px;font-family:var(--mono);font-size:8.5px;color:var(--ready-glow);letter-spacing:.14em}
+  .team-rail{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--turn)}
+  .team-rail b{color:var(--ink-3);font-weight:400}
+  .hud-side{border-left:1px solid var(--line-soft);padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+  @media (max-width:940px){.hud-side{border-left:0;border-top:1px solid var(--line-soft)}}
+  .ai-line{font-family:var(--mono);font-size:12.5px;color:var(--ready-glow);min-height:38px;letter-spacing:.02em;line-height:1.5;text-shadow:0 0 8px rgba(83,230,196,.35)}
+  .ai-line .caret{display:inline-block;width:7px;height:13px;background:var(--ready-glow);vertical-align:-2px;animation:blink 1s infinite}
+  .fh-note{display:none;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--notice);border:1px solid rgba(188,132,40,.45);border-radius:4px;padding:6px 9px;line-height:1.5}
+  .fh-note.show{display:block}
+  .results{display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:430px;padding-right:2px}
+  .r-card{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 12px;text-align:left;width:100%;
+    transition:border-color 120ms var(--e-out),transform 150ms var(--e-out),box-shadow 200ms var(--e-out);
+    animation:cardIn 360ms var(--e-expo) both}
+  @keyframes cardIn{from{opacity:0;transform:translateY(9px)}}
+  .r-card:hover{border-color:var(--ink-3);transform:translateX(2px);box-shadow:inset 2px 0 0 rgba(83,230,196,.4)}
+  .r-card.top{border-color:rgba(83,230,196,.55);animation:cardIn 360ms var(--e-expo) both,topGlow 450ms var(--e-out) both}
+  @keyframes topGlow{from{box-shadow:0 0 0 0 rgba(83,230,196,0)}to{box-shadow:0 0 0 1px rgba(83,230,196,.15),0 0 24px -8px rgba(83,230,196,.35)}}
+  .r-row1{display:flex;align-items:baseline;gap:8px}
+  .r-rank{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--ready-glow);border-radius:3px;padding:1px 5px;letter-spacing:.06em}
+  .r-card.upcoming .r-rank{background:var(--notice)}
+  .r-unit{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.08em}
+  .r-plan{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.1em;text-transform:uppercase}
+  .r-rent{margin-left:auto;font-family:var(--mono);font-size:14px;font-weight:600}
+  .r-row2{display:flex;gap:10px;margin-top:3px;font-family:var(--mono);font-size:10.5px;color:var(--ink-2);letter-spacing:.05em;flex-wrap:wrap}
+  .r-avail{color:var(--ready-glow)}
+  .r-card.upcoming .r-avail{color:var(--notice)}
+  .r-why{margin-top:5px;font-size:11.5px;color:var(--ink-2)}
+  .r-match{display:flex;align-items:center;gap:8px;margin-top:7px}
+  .r-bar{flex:1;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+  .r-bar i{display:block;height:100%;width:100%;background:var(--ready-glow);border-radius:2px;transform-origin:left;transform:scaleX(var(--sx,1));animation:barFill 600ms var(--e-expo) both}
+  @keyframes barFill{from{transform:scaleX(0)}to{transform:scaleX(var(--sx,1))}}
+  .r-card.upcoming .r-bar i{background:var(--notice)}
+  .r-pct{font-family:var(--mono);font-size:10.5px;color:var(--ink-2)}
+  .r-route{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:11px;color:var(--ready-glow);letter-spacing:.04em;line-height:1.6}
+  .r-card.routed .r-route{display:block}
+  .r-guide{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--ink-2);border:1px solid var(--line);padding:3px 9px;border-radius:3px;text-transform:uppercase;transition:color 120ms var(--e-out),border-color 120ms var(--e-out),background 120ms var(--e-out)}
+  .r-guide:hover{color:var(--ready-glow);border-color:var(--ready-glow);background:rgba(83,230,196,.06)}
+  .skel{border:1px solid var(--line);border-radius:6px;background:var(--panel);height:88px;position:relative;overflow:hidden}
+  .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(83,230,196,.07) 50%,transparent 70%);background-size:200% 100%;animation:shimmer 900ms linear infinite}
+  @keyframes shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
+  .skel-cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:var(--ink-3);text-transform:uppercase}
+  .no-results{font-family:var(--mono);font-size:12px;color:var(--ink-2);padding:16px 4px;line-height:1.7}
+
+  .querybar{display:flex;gap:8px;align-items:center;padding:12px 16px;border-top:1px solid var(--line-soft)}
+  .mic{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ready-glow);flex:none}
+  .mic svg{width:15px;height:15px}
+  .qinput{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:6px;color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 12px;letter-spacing:.02em;min-width:0}
+  .qinput::placeholder{color:var(--ink-3)}
+  .qgo{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--bg);background:var(--ready-glow);border-radius:6px;padding:10px 16px;font-weight:700;flex:none;transition:box-shadow 120ms var(--e-out),transform 120ms var(--e-out)}
+  .qgo:hover{box-shadow:0 0 14px -4px rgba(83,230,196,.7);transform:translateY(-1px)}
+  .qgo:active{transform:translateY(0);transition-duration:80ms}
+  .qinput{transition:background-color 400ms var(--e-out)}
+  .qinput.flash{background-color:rgba(83,230,196,.18);transition:none}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 14px}
+  .chip{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-2);border:1px solid var(--line);border-radius:99px;padding:5px 12px;transition:color 120ms var(--e-out),border-color 120ms var(--e-out),background 120ms var(--e-out)}
+  .chip:hover{color:var(--ready-glow);border-color:var(--ready-glow);background:rgba(83,230,196,.06)}
+
+  /* tower svg */
+  .t-cell{fill:#0D1319;stroke:#1B2630;stroke-width:.6}
+  .t-cell.vacant{fill:rgba(23,162,129,.28);stroke:var(--ready)}
+  .t-cell.turn{fill:rgba(74,144,217,.22);stroke:var(--turn)}
+  .t-cell.notice{fill:rgba(188,132,40,.20);stroke:var(--notice)}
+  .t-cell.hit{stroke:var(--ready-glow);stroke-width:1.4;fill:rgba(83,230,196,.42);filter:drop-shadow(0 0 6px rgba(83,230,196,.8))}
+  .t-cell.hit.upcoming{stroke:var(--notice);fill:rgba(188,132,40,.4);filter:drop-shadow(0 0 6px rgba(188,132,40,.8))}
+  .t-cell.amenity{fill:none;stroke:#2A3A44}
+  .t-line{stroke:#233240;stroke-width:.8}
+  .t-label{font-family:var(--mono);font-size:7px;fill:var(--ink-3);letter-spacing:.08em}
+  .t-callout-line{stroke:var(--ready-glow);stroke-width:.8;opacity:.85}
+  .t-callout-line.upcoming{stroke:var(--notice)}
+  .t-callout-text{font-family:var(--mono);font-size:8.5px;fill:var(--ready-glow);letter-spacing:.1em;font-weight:700}
+  .t-callout-text.upcoming{fill:var(--notice)}
+  .ping{transform-box:fill-box;transform-origin:center;animation:ping 1.6s cubic-bezier(0,.55,.45,1) infinite;fill:none;stroke:var(--ready-glow);opacity:0}
+  .ping.upcoming{stroke:var(--notice)}
+  .ping.r2{animation-delay:.5s}
+  .ping.capped{animation-iteration-count:3}
+  @keyframes ping{0%{transform:scale(.35);opacity:.75;stroke-width:1.6}70%{opacity:0}100%{transform:scale(2.1);opacity:0;stroke-width:.4}}
+  .rt{fill:none;stroke:var(--ready-glow);stroke-width:1.2;opacity:0;transform-box:fill-box;transition:transform 260ms var(--e-expo),opacity 260ms var(--e-expo)}
+  .rt.upcoming{stroke:var(--notice)}
+  .rt.lock{transform:translate(0,0) !important;opacity:.9}
+  .t-cell.wake{animation:wake 320ms var(--e-out);animation-delay:0ms}
+  @keyframes wake{0%{filter:brightness(2.1)}100%{filter:brightness(1)}}
+  .scan-edge{fill:var(--ready-glow);filter:drop-shadow(0 0 4px rgba(83,230,196,.9))}
+  .scanline-g{opacity:0}
+  .scanline-g.run{animation:scan 900ms var(--e-inout) 1}
+  .scanline-g.ambient{animation:scanAmb 1.4s linear 1}
+  @keyframes scan{0%{opacity:1;transform:translateY(0)}92%{opacity:1}100%{opacity:0;transform:translateY(292px)}}
+  @keyframes scanAmb{0%{opacity:.35;transform:translateY(0)}100%{opacity:0;transform:translateY(292px)}}
+  body.boot .t-cell{animation:cellOn 180ms var(--e-out) both;animation-delay:var(--bd,0ms)}
+  body.boot .t-label,body.boot .t-line{animation:bootFade 240ms var(--e-out) 680ms both}
+  @keyframes cellOn{from{opacity:0}}
+  @keyframes bootFade{from{opacity:0}}
+  body.boot .topbar{animation:bootFade 240ms var(--e-out) both}
+  body.boot .tabs{animation:bootFade 240ms var(--e-out) 80ms both}
+  body.boot .hud-frame{animation:frameOn 420ms var(--e-inout) 160ms both}
+  @keyframes frameOn{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0 0 0% 0)}}
+  body.boot .hud-side{animation:riseIn 300ms var(--e-expo) 640ms both}
+  body.boot .querybar{animation:riseIn 300ms var(--e-expo) 700ms both}
+  body.boot .chips{animation:riseIn 300ms var(--e-expo) 760ms both}
+  @keyframes riseIn{from{opacity:0;transform:translateY(6px)}}
+  .t-callout-line{stroke-dasharray:1;stroke-dashoffset:1;animation:lineDraw 240ms var(--e-inout) both}
+  @keyframes lineDraw{to{stroke-dashoffset:0}}
+  .t-callout-text{opacity:0;animation:bootFade 140ms var(--e-out) both}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-delay:0ms !important;transition-duration:.01ms !important}
+    .ping{animation:none;opacity:0}
+    .live .dot,.ai-line .caret,.skel::after{animation:none}
+  }
+
+  /* ---------- OPS ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{padding:12px 14px}
+  .kpi .v{font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:.02em;margin-top:4px}
+  .kpi .s{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .kpi.good .v{color:var(--ready-glow)}
+  .kpi.warn .v{color:var(--notice)}
+  .ops-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px}
+  @media (max-width:940px){.ops-grid{grid-template-columns:1fr}}
+  .stack-head{display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .legend{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .lg{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-2);text-transform:uppercase}
+  .sw{width:11px;height:11px;border-radius:2px;border:1px solid transparent}
+  .sw.occupied{background:var(--occupied)}
+  .sw.vacant{background:rgba(23,162,129,.35);border-color:var(--ready)}
+  .sw.turn{background:rgba(74,144,217,.3);border-color:var(--turn)}
+  .sw.notice{background:rgba(188,132,40,.28);border-color:var(--notice)}
+  .sw.model{background:repeating-linear-gradient(45deg,#2A3742 0 3px,#141C24 3px 6px);border-color:#3A4A57}
+  .stackplan{padding:14px 16px 18px;overflow-x:auto}
+  .sp-row{display:flex;gap:4px;align-items:center;margin-bottom:4px}
+  .sp-floor{width:30px;font-family:var(--mono);font-size:10px;color:var(--ink-3);text-align:right;padding-right:4px;flex:none}
+  .sp-cell{width:46px;height:24px;border-radius:3px;background:var(--occupied);border:1px solid transparent;font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:.04em;flex:none;display:flex;align-items:center;justify-content:center;transition:transform 100ms var(--e-out),filter 100ms var(--e-out)}
+  .sp-cell:not(.amenity):hover{transform:scale(1.08);filter:brightness(1.35)}
+  .sp-cell.amenity{background:none;border:1px dashed #2A3A44;color:#3E4F5B;cursor:default}
+  .sp-cell:hover{z-index:2;color:var(--ink)}
+  .sp-cell.vacant{background:rgba(23,162,129,.32);border-color:var(--ready);color:var(--ink)}
+  .sp-cell.turn{background:rgba(74,144,217,.26);border-color:var(--turn);color:var(--ink)}
+  .sp-cell.notice{background:rgba(188,132,40,.24);border-color:var(--notice);color:var(--ink)}
+  .sp-cell.model{background:repeating-linear-gradient(45deg,#2A3742 0 4px,#141C24 4px 8px);border-color:#3A4A57;color:var(--ink-2)}
+  .sp-cell.selected{outline:2px solid var(--ready-glow);outline-offset:1px}
+  .sp-stacklabels{display:flex;gap:4px;margin-left:34px;margin-bottom:8px}
+  .sp-stacklabels span{width:46px;text-align:center;font-family:var(--mono);font-size:8.5px;color:var(--ink-3);letter-spacing:.06em}
+  .ops-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .detail{padding:14px 16px}
+  .detail h3{margin:0;font-family:var(--mono);font-size:18px;letter-spacing:.1em}
+  .d-status{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;padding:3px 8px;border-radius:3px;margin-top:8px}
+  .d-status.vacant{color:var(--ready-glow);border:1px solid var(--ready)}
+  .d-status.turn{color:#8FC1F2;border:1px solid var(--turn)}
+  .d-status.notice{color:#E2B665;border:1px solid var(--notice)}
+  .d-status.occupied{color:var(--ink-2);border:1px solid var(--line)}
+  .d-status.model{color:var(--ink-2);border:1px dashed var(--ink-3)}
+  .d-rows{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .d-row{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;border-bottom:1px solid var(--line-soft);padding-bottom:6px}
+  .d-row b{font-family:var(--mono);font-weight:600}
+  .d-row span{color:var(--ink-2)}
+  .d-send{margin-top:14px;width:100%;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--bg);background:var(--ready-glow);border-radius:5px;padding:10px;font-weight:700;transition:box-shadow 120ms var(--e-out),transform 120ms var(--e-out)}
+  .d-send:hover{box-shadow:0 0 14px -4px rgba(83,230,196,.7);transform:translateY(-1px)}
+  .d-send:active{transform:translateY(0);transition-duration:80ms}
+  .feed{padding:14px 16px}
+  .feed h4,.detail h4{margin:0 0 10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .f-item{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:12px;line-height:1.45}
+  .f-item:last-child{border-bottom:0}
+  .f-dot{width:6px;height:6px;border-radius:50%;margin-top:6px;flex:none}
+  .f-dot.g{background:var(--ready)} .f-dot.a{background:var(--notice)} .f-dot.b{background:var(--turn)}
+  .f-time{font-family:var(--mono);font-size:10px;color:var(--ink-3);white-space:nowrap;margin-left:auto;padding-left:8px}
+
+  /* ---------- VISION ---------- */
+  .vision-intro{max-width:64ch;color:var(--ink-2);font-size:15px;margin:6px 0 22px}
+  .vision-intro strong{color:var(--ink)}
+  .phases{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;margin-bottom:26px}
+  .phase{padding:18px;display:flex;flex-direction:column;gap:8px}
+  .phase .ph-tag{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ready-glow)}
+  .phase.next .ph-tag{color:var(--notice)}
+  .phase.later .ph-tag{color:var(--turn)}
+  .phase h3{margin:0;font-size:17px;letter-spacing:.01em;text-wrap:balance}
+  .phase p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.6}
+  .phase .ph-status{margin-top:auto;padding-top:10px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase;border-top:1px solid var(--line-soft)}
+  .arch{padding:18px;overflow-x:auto}
+  .arch h4{margin:0 0 14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .arch-flow{display:flex;align-items:stretch;gap:0;min-width:640px}
+  .arch-node{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-2);flex:1}
+  .arch-node .an-t{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+  .arch-node .an-s{font-size:11.5px;color:var(--ink-2);margin-top:4px;line-height:1.5}
+  .arch-node.core{border-color:rgba(83,230,196,.5);box-shadow:0 0 20px -8px rgba(83,230,196,.4)}
+  .arch-node.core .an-t{color:var(--ready-glow)}
+  .arch-arrow{display:flex;align-items:center;padding:0 10px;color:var(--ink-3);font-family:var(--mono);flex:none}
+  .footer{border-top:1px solid var(--line);margin-top:8px;padding:16px 18px;display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink-3);text-transform:uppercase}
+  .footer span{white-space:nowrap}
+
+  .tooltip{position:fixed;pointer-events:none;background:#060A0D;border:1px solid var(--line);border-radius:5px;padding:8px 10px;font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink);z-index:99;letter-spacing:.03em;box-shadow:0 6px 24px rgba(0,0,0,.5);opacity:0;transform:scale(.97);transition:opacity 120ms var(--e-out),transform 120ms var(--e-out)}
+  .tooltip.show{opacity:1;transform:scale(1)}
+  .f-item.f-new{animation:feedNew 280ms var(--e-inout),feedGlow 1.2s var(--e-out);overflow:hidden}
+  @keyframes feedNew{from{max-height:0;opacity:0}to{max-height:48px;opacity:1}}
+  @keyframes feedGlow{from{background:rgba(83,230,196,.08)}to{background:transparent}}
+  .tooltip .tt-dim{color:var(--ink-2)}
+</style>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">BEAC<b>O</b>N</span>
+    <span class="brand-sub">Spatial Leasing Intelligence</span>
+  </div>
+  <div class="deploy">
+    <span class="site">Deployment: Lumina Hollywood · 1522 Gordon St · 299 units</span>
+    <span class="live"><span class="dot"></span>PMS SYNC LIVE</span>
+    <span class="clock num" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Screens">
+  <button class="tab" role="tab" aria-selected="true" data-screen="hud">01 · Agent HUD</button>
+  <button class="tab" role="tab" aria-selected="false" data-screen="ops">02 · Ops Console</button>
+  <button class="tab" role="tab" aria-selected="false" data-screen="vision">03 · Vision</button>
+  <div id="tabIndicator" aria-hidden="true"></div>
+</nav>
+
+<!-- ============ SCREEN 1 · HUD ============ -->
+<section class="screen active" id="screen-hud">
+  <div class="hud-frame">
+    <div class="hud-head">
+      <span class="eyebrow">In-lens display</span><span class="sep">/</span>
+      <span class="eyebrow" style="color:var(--ink-2)">Agent: E. Reyes · Tour 4 of 9</span>
+      <span class="team-rail">TEAM ▸ CHEN <b>L1</b> · POOLE <b>FL 9</b> · REYES <b>YOU</b></span>
+      <span class="sim-tag">Meta Ray-Ban Display · simulated feed</span>
+    </div>
+    <div class="hud-grid">
+      <div class="hud-stage" id="hudStage"><!-- tower SVG injected --></div>
+      <aside class="hud-side">
+        <div class="ai-line" id="aiLine" aria-live="polite"><span class="caret"></span></div>
+        <div class="fh-note" id="fhNote">FAIR HOUSING GUARD — familial status is protected under the Fair Housing Act. That part of the request was ignored; matching uses unit criteria only.</div>
+        <div class="results" id="results"></div>
+      </aside>
+    </div>
+    <div class="querybar">
+      <span class="mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+      <input class="qinput" id="qinput" type="text" placeholder="Ask BEACON — “two bedroom, top floor, we have a dog”" aria-label="Prospect request">
+      <button class="qgo" id="qgo">Match</button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2 · OPS ============ -->
+<section class="screen" id="screen-ops">
+  <div class="kpis" id="kpis"></div>
+  <div class="ops-grid">
+    <div class="panel">
+      <div class="stack-head">
+        <span class="eyebrow">Stacking plan — live inventory</span>
+        <div class="legend">
+          <span class="lg"><span class="sw occupied"></span>Occupied</span>
+          <span class="lg"><span class="sw vacant"></span>Vacant · ready</span>
+          <span class="lg"><span class="sw turn"></span>In turn</span>
+          <span class="lg"><span class="sw notice"></span>On notice</span>
+          <span class="lg"><span class="sw model"></span>Model</span>
+        </div>
+      </div>
+      <div class="stackplan" id="stackplan"></div>
+    </div>
+    <aside class="ops-side">
+      <div class="panel detail" id="detail">
+        <h4>Unit detail</h4>
+        <p style="color:var(--ink-3);font-size:12.5px;margin:0">Select a unit on the stacking plan.</p>
+      </div>
+      <div class="panel feed">
+        <h4>Live activity</h4>
+        <div id="feed"></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3 · VISION ============ -->
+<section class="screen" id="screen-vision">
+  <p class="eyebrow" style="margin:4px 0 10px">Integration roadmap</p>
+  <p class="vision-intro"><strong>One source of truth, every surface.</strong> BEACON keeps a live, PMS-synced model of the building — every unit, status, and date. The interface travels to wherever the agent is standing: a browser today, the lens of their glasses next, and full spatial walkthroughs after that.</p>
+  <div class="phases">
+    <div class="phase panel">
+      <span class="ph-tag">Phase 1 · Shipping now</span>
+      <h3>Web HUD + true in-lens app</h3>
+      <p>This demo, plus BEACON GLASS: since May 2026, Meta's Wearables Device Access Toolkit runs third-party web apps directly on Ray-Ban Display — a 600×600 in-lens viewport driven by Neural Band gestures. BEACON GLASS is built and loads on the glasses in developer mode today.</p>
+      <span class="ph-status">Status: built — web HUD + in-lens app (dev preview, ≤100 testers)</span>
+    </div>
+    <div class="phase panel next">
+      <span class="ph-tag">Phase 2 · Next</span>
+      <h3>Public rollout + voice</h3>
+      <p>Meta's open publishing — expected later in 2026 — takes BEACON GLASS from developer preview to any agent's glasses, no tester list. And when Meta exposes voice and Meta AI to third-party display apps, the prospect's own words drive the lens directly.</p>
+      <span class="ph-status">Status: gated on Meta open publishing — app already built</span>
+    </div>
+    <div class="phase panel later">
+      <span class="ph-tag">Phase 3 · Later</span>
+      <h3>Holo table + VR walkthrough</h3>
+      <p>The same building model, projected: a command-table 3D view of the tower for the leasing office, and a Quest walkthrough of the prospect's exact unit — not a model unit, theirs — before it's even vacant.</p>
+      <span class="ph-status">Status: concept — same data spine</span>
+    </div>
+  </div>
+  <div class="panel arch">
+    <h4>System architecture</h4>
+    <div class="arch-flow">
+      <div class="arch-node">
+        <div class="an-t">PMS of record</div>
+        <div class="an-s">Yardi · RealPage · Entrata · AppFolio. Availability, notices, pricing — read-only sync.</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node core">
+        <div class="an-t">BEACON core</div>
+        <div class="an-s">Live building model + match engine. Natural-language request → ranked units with reasons. Fair-housing guard built in.</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node">
+        <div class="an-t">Agent surfaces</div>
+        <div class="an-s">Web HUD · ops console · Meta glasses (voice now, lens next) · holo table · VR.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <span>BEACON · demo build 0.3</span>
+  <span>Prepared for Lumina Hollywood (Morguard)</span>
+  <span>Plans &amp; pricing from public listings · statuses simulated</span>
+  <span style="margin-left:auto">Companion in-lens app: BEACON GLASS · Meta Wearables Toolkit dev preview</span>
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+'use strict';
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(!REDUCED) document.body.classList.add('boot');
+
+/* shared count-up ticker (expo-out) */
+const ticker={jobs:[],raf:0};
+function addJob(el,from,to,dur,delay,fmt){
+  if(REDUCED){ el.textContent=fmt(to); return; }
+  ticker.jobs.push({el,from,to,dur,fmt,start:performance.now()+delay});
+  if(!ticker.raf) ticker.raf=requestAnimationFrame(tickJobs);
+}
+function tickJobs(now){
+  ticker.jobs=ticker.jobs.filter(j=>{
+    const t=(now-j.start)/j.dur;
+    if(t<0) return true;
+    const k=t>=1?1:1-Math.pow(2,-10*t);
+    j.el.textContent=j.fmt(j.from+(j.to-j.from)*k);
+    return t<1;
+  });
+  ticker.raf=ticker.jobs.length?requestAnimationFrame(tickJobs):0;
+}
+
+/* ============ DATA ============ */
+const TODAY = new Date(2026, 6, 30); // demo anchor date
+// Real Lumina Hollywood plan codes / sqft / starting rents (public listings, Jul 2026).
+// Rents marked "Contact" on their site are estimated from the published ladder.
+const PLANS = {
+  '0x1A':{name:'0x1A Studio', beds:0, baths:1, sqft:576,  base:2358},
+  '1x1A':{name:'1x1A One Bed + Den', beds:1, baths:1, sqft:690, base:2336},
+  '1x1B':{name:'1x1B One Bed', beds:1, baths:1, sqft:690,  base:2503},
+  '1x1C':{name:'1x1C One Bed', beds:1, baths:1, sqft:832,  base:2700},
+  '1x1D':{name:'1x1D One Bed', beds:1, baths:1, sqft:856,  base:2750},
+  '1x1E':{name:'1x1E One Bed', beds:1, baths:1, sqft:857,  base:2958},
+  '1x1F':{name:'1x1F One Bed', beds:1, baths:1, sqft:885,  base:2850},
+  '1x1G':{name:'1x1G One Bed', beds:1, baths:1, sqft:935,  base:3050},
+  '2x1A':{name:'2x1A Two Bed', beds:2, baths:1, sqft:862,  base:3349},
+  '2x1B':{name:'2x1B Two Bed', beds:2, baths:1, sqft:911,  base:3741},
+  '2x1C':{name:'2x1C Two Bed', beds:2, baths:1, sqft:965,  base:3261},
+  '2x2A':{name:'2x2A Two Bed Corner', beds:2, baths:2, sqft:1171, base:3959},
+  '2x2D':{name:'2x2D Two Bed Corner', beds:2, baths:2, sqft:1440, base:4900},
+  '2x2E':{name:'2x2E Two Bed Grand', beds:2, baths:2, sqft:1506, base:5400},
+};
+const STACKS = 15;
+const STACK_PLAN = {1:'1x1B',2:'2x2D',3:'0x1A',4:'1x1A',5:'1x1E',6:'1x1C',7:'0x1A',8:'2x1A',
+  9:'2x2A',10:'2x1C',11:'1x1F',12:'2x1B',13:'1x1G',14:'1x1D',15:'2x2E'};
+function viewOf(s){ return s<=5?'Hollywood Sign (N)':s<=8?'Griffith Park (E)':s<=12?'DTLA Skyline (S)':'Sunset West (W)'; }
+const FLOORS = []; for(let f=24;f>=5;f--) FLOORS.push(f);
+const AMENITY_FLOOR = 5; // L5 amenity deck: pool, fitness, dog run
+
+// curated non-occupied inventory — the demo story (statuses simulated)
+const SPECIAL = {
+  '2402':{status:'vacant', days:6},
+  '2309':{status:'vacant', days:12},
+  '2108':{status:'vacant', days:9},
+  '1804':{status:'vacant', days:15},
+  '1503':{status:'vacant', days:22},
+  '907' :{status:'vacant', days:11},
+  '611' :{status:'vacant', days:4},
+  '715' :{status:'vacant', days:31},
+  '2212':{status:'turn', ready:'2026-08-08'},
+  '1610':{status:'turn', ready:'2026-08-05'},
+  '1205':{status:'turn', ready:'2026-08-12'},
+  '806' :{status:'turn', ready:'2026-08-15'},
+  '2415':{status:'notice', avail:'2026-09-01'},
+  '2001':{status:'notice', avail:'2026-09-12'},
+  '1713':{status:'notice', avail:'2026-08-30'},
+  '1314':{status:'notice', avail:'2026-09-20'},
+  '1010':{status:'notice', avail:'2026-09-05'},
+  '602' :{status:'notice', avail:'2026-10-01'},
+  '1907':{status:'notice', avail:'2026-09-15'},
+  '505' :{status:'model'},
+};
+
+const UNITS = [];
+for(const f of FLOORS){
+  for(let s=1;s<=STACKS;s++){
+    if(f===AMENITY_FLOOR && s===1) continue; // L5 stack 01 is the amenity-deck entry — 299 homes total
+    const planKey = STACK_PLAN[s];
+    const p = PLANS[planKey];
+    const id = `${f}${String(s).padStart(2,'0')}`;
+    const north = s<=5;
+    const rent = Math.round((p.base + (f-5)*12 + (north&&f>=15?40:0))/5)*5;
+    const sp = SPECIAL[id] || {status:'occupied'};
+    UNITS.push({id, floor:f, stack:s, plan:planKey, ...p, planKey, rent, north,
+      view:viewOf(s), status:sp.status, days:sp.days||0,
+      ready:sp.ready||null, avail:sp.avail||null});
+  }
+}
+const byId = Object.fromEntries(UNITS.map(u=>[u.id,u]));
+const fmt$ = n => '$'+n.toLocaleString('en-US');
+const fmtDate = iso => { const d=new Date(iso+'T12:00:00');
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase(); };
+function availText(u){
+  if(u.status==='vacant') return 'READY NOW';
+  if(u.status==='turn')   return 'TURN · READY '+fmtDate(u.ready);
+  if(u.status==='notice') return 'NOTICE · AVAIL '+fmtDate(u.avail);
+  if(u.status==='model')  return 'MODEL RESIDENCE';
+  return 'OCCUPIED';
+}
+
+/* ============ MATCH ENGINE ============ */
+function parseQuery(q){
+  const t = q.toLowerCase();
+  const req = {beds:null, floorPref:null, budget:null, pets:false, den:false,
+               view:null, asap:false, fhFlag:false, raw:q};
+  if(/\bstudio\b/.test(t)) req.beds=0;
+  else if(/\b(one|1)\s*[-]?\s*(bed|br|bd)/.test(t)) req.beds=1;
+  else if(/\b(two|2)\s*[-]?\s*(bed|br|bd)/.test(t)) req.beds=2;
+  else if(/\b(three|3)\s*[-]?\s*(bed|br|bd)/.test(t)) req.beds=3;
+  if(/penthouse/.test(t)){ req.floorPref='top'; if(req.beds===null) req.beds=2; }
+  if(/top floor|highest|very top/.test(t)) req.floorPref='top';
+  else if(/high floor|upper floor|up high|high up/.test(t)) req.floorPref='high';
+  else if(/low floor|lower floor|ground/.test(t)) req.floorPref='low';
+  const fl = t.match(/(?:floor|fl\.?)\s*(\d{1,2})\b/);
+  if(fl) req.floorPref = parseInt(fl[1],10);
+  const b = t.match(/(?:under|below|max|less than|budget)\s*\$?\s*([\d,]{3,})/) || t.match(/\$\s*([\d,]{3,})/);
+  if(b) req.budget = parseInt(b[1].replace(/,/g,''),10);
+  if(/\b(dog|cat|pet|puppy)/.test(t)) req.pets=true;
+  if(/\b(den|office|work from home|wfh)\b/.test(t)) req.den=true;
+  if(/hollywood sign|the sign|sign view|hills|north/.test(t)) req.view='N';
+  else if(/griffith|observatory|east/.test(t)) req.view='E';
+  else if(/downtown|skyline|dtla|south/.test(t)) req.view='S';
+  else if(/sunset|west/.test(t)) req.view='W';
+  if(/asap|right away|immediately|now|this week/.test(t)) req.asap=true;
+  if(/\b(kid|kids|child|children|family|families|married|single|no couples)\b/.test(t)) req.fhFlag=true;
+  return req;
+}
+function scoreUnit(u, req){
+  if(u.status==='occupied'||u.status==='model') return null;
+  if(req.beds!==null && u.beds!==req.beds) return null;
+  if(req.budget && u.rent > req.budget) return null;
+  if(req.asap && u.status==='notice') return null;
+  let s=40; const why=[];
+  if(u.status==='vacant'){ s+=30; }
+  else if(u.status==='turn'){ s+=18; why.push('ready '+fmtDate(u.ready).toLowerCase()); }
+  else { s+=6; }
+  if(typeof req.floorPref==='number'){ const d=Math.abs(u.floor-req.floorPref);
+    s+=Math.max(0,20-d*4); if(d===0) why.push('exact floor · fl '+u.floor); else if(d<=2) why.push(d+' floor'+(d>1?'s':'')+' off fl '+req.floorPref); }
+  else if(req.floorPref==='top'){ s+=Math.round((u.floor/23)*22); if(u.floor>=21) why.push('top of tower · fl '+u.floor); }
+  else if(req.floorPref==='high'){ s+=Math.round((u.floor/23)*16); if(u.floor>=15) why.push('high floor'); }
+  else if(req.floorPref==='low'){ s+=Math.round(((24-u.floor)/22)*16); if(u.floor<=6) why.push('low floor'); }
+  if(req.view){ const map={N:'Sign',E:'Griffith',S:'DTLA',W:'Sunset'};
+    if(u.view.includes(map[req.view])){ s+=14; why.push(u.view.toLowerCase()+' exposure'); } }
+  if(req.pets){ const d=Math.abs(u.floor-AMENITY_FLOOR); const ps=Math.max(0,10-d);
+    s+=ps; if(d<=2) why.push('dog run '+(d===0?'on this floor':d+' floor'+(d>1?'s':'')+' away'));
+    why.push('no pet deposit · no weight limit'); }
+  if(req.den && u.planKey==='1x1A'){ s+=12; why.push('built-in den'); }
+  if(u.floor>=23 && u.sqft>=1400) why.unshift('top-of-tower grand corner');
+  else if(u.planKey.startsWith('2x2')) why.push('corner residence');
+  if(req.budget && u.rent<=req.budget-300) { s+=4; why.push(fmt$(req.budget-u.rent)+' under budget'); }
+  return {u, score:Math.min(99,s), why};
+}
+function runMatch(q){
+  const req = parseQuery(q);
+  let scored = UNITS.map(u=>scoreUnit(u,req)).filter(Boolean);
+  scored.sort((a,b)=>b.score-a.score || a.u.rent-b.u.rent);
+  const now = scored.filter(r=>r.u.status!=='notice').slice(0,4);
+  const soon = scored.filter(r=>r.u.status==='notice').slice(0,2);
+  return {req, now, soon};
+}
+
+/* ============ HUD TOWER ============ */
+const CELL_W=13, CELL_H=12.6, GAP=1.8, TX=42, TY=34;
+function towerSVG(){
+  const rows = FLOORS.length;
+  const w = TX + STACKS*(CELL_W+GAP) + 150, h = TY + rows*(CELL_H+GAP) + 34;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Lumina Hollywood tower schematic with unit availability">`;
+  // roof + antenna
+  const towerW = STACKS*(CELL_W+GAP)-GAP;
+  s += `<line class="t-line" x1="${TX-8}" y1="${TY-6}" x2="${TX+towerW+8}" y2="${TY-6}"/>`;
+  s += `<line class="t-line" x1="${TX+towerW/2}" y1="${TY-6}" x2="${TX+towerW/2}" y2="${TY-22}"/>`;
+  s += `<circle cx="${TX+towerW/2}" cy="${TY-24}" r="1.6" fill="var(--alert)"/>`;
+  s += `<text class="t-label" x="${TX-8}" y="${TY-12}">LUMINA HOLLYWOOD · GORDON ST ELEVATION</text>`;
+  FLOORS.forEach((f,ri)=>{
+    const y = TY + ri*(CELL_H+GAP);
+    if(f%5===0||f===24) s += `<text class="t-label" x="${TX-14}" y="${y+CELL_H-3}" text-anchor="end">${f}</text>`;
+    const bd = `--bd:${300+(rows-1-ri)*14}ms`; // bottom floor powers on first
+    for(let st=1;st<=STACKS;st++){
+      const x = TX + (st-1)*(CELL_W+GAP);
+      if(f===AMENITY_FLOOR && st===1){
+        s += `<rect class="t-cell amenity" x="${x}" y="${y}" width="${CELL_W}" height="${CELL_H}" rx="1.2" stroke-dasharray="2 1.6" style="${bd}"/>`;
+        continue;
+      }
+      const u = byId[`${f}${String(st).padStart(2,'0')}`];
+      const cls = u.status==='vacant'?'vacant':u.status==='turn'?'turn':u.status==='notice'?'notice':'';
+      s += `<rect class="t-cell ${cls}" id="tc-${u.id}" x="${x}" y="${y}" width="${CELL_W}" height="${CELL_H}" rx="1.2" style="${bd}"/>`;
+    }
+  });
+  // ground + podium
+  const gy = TY + rows*(CELL_H+GAP) + 4;
+  s += `<line class="t-line" x1="${TX-26}" y1="${gy}" x2="${TX+towerW+34}" y2="${gy}" stroke-width="1.2"/>`;
+  s += `<text class="t-label" x="${TX-8}" y="${gy+13}">L1 RETAIL · LOBBY · L2–4 CREATIVE OFFICE · ELEV A / ELEV B</text>`;
+  // amenity marker
+  const amY = TY + FLOORS.indexOf(AMENITY_FLOOR)*(CELL_H+GAP);
+  s += `<text class="t-label" x="${TX+towerW+6}" y="${amY+CELL_H-3}" fill="#3E4F5B">◂ L5 AMENITY DECK · POOL + DOG RUN</text>`;
+  // scanline: bright leading edge + gradient trail (U3)
+  s += `<g class="scanline-g" id="scanline">
+    <defs><linearGradient id="trailGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53E6C4" stop-opacity="0"/>
+      <stop offset="1" stop-color="#53E6C4" stop-opacity="0.14"/></linearGradient></defs>
+    <rect x="${TX-4}" y="${TY-28}" width="${towerW+8}" height="26" fill="url(#trailGrad)"/>
+    <rect class="scan-edge" x="${TX-4}" y="${TY-2}" width="${towerW+8}" height="1.5"/></g>`;
+  s += `<g id="callouts"></g>`;
+  return s+'</svg>';
+}
+function drawCallouts(matches){
+  const g = document.getElementById('callouts'); if(!g) return;
+  document.querySelectorAll('.t-cell').forEach(c=>c.classList.remove('hit','upcoming'));
+  let out='';
+  matches.forEach((m,i)=>{
+    const cell = document.getElementById('tc-'+m.u.id); if(!cell) return;
+    const up = m.u.status==='notice';
+    cell.classList.add('hit'); if(up) cell.classList.add('upcoming');
+    const x=+cell.getAttribute('x'), y=+cell.getAttribute('y');
+    const cx=x+CELL_W/2, cy=y+CELL_H/2;
+    const lx = TX + STACKS*(CELL_W+GAP) + 26, ly = cy;
+    const d = i*70, upc = up?'upcoming':'';
+    // lock-on reticle: four corner brackets converge (U4)
+    const a=4, o=1.5, X2=x+CELL_W, Y2=y+CELL_H;
+    [[`M ${x-o+a} ${y-o} H ${x-o} V ${y-o+a}`,-8,-8],
+     [`M ${X2+o-a} ${y-o} H ${X2+o} V ${y-o+a}`,8,-8],
+     [`M ${x-o+a} ${Y2+o} H ${x-o} V ${Y2+o-a}`,-8,8],
+     [`M ${X2+o-a} ${Y2+o} H ${X2+o} V ${Y2+o-a}`,8,8]
+    ].forEach(c=>{
+      out += `<path class="rt ${upc}" d="${c[0]}" style="transform:translate(${c[1]}px,${c[2]}px);transition-delay:${d}ms"/>`;
+    });
+    // double ping, rank-gated: only #1 loops, others 3 cycles (U5)
+    const cap = i>0?' capped':'';
+    out += `<circle class="ping ${upc}${cap}" cx="${cx}" cy="${cy}" r="7" style="animation-delay:${d+260}ms"/>`;
+    out += `<circle class="ping r2 ${upc}${cap}" cx="${cx}" cy="${cy}" r="7" style="animation-delay:${d+760}ms"/>`;
+    // leader line draws outward, label fades in after (U12)
+    out += `<line class="t-callout-line ${upc}" pathLength="1" x1="${X2+3}" y1="${cy}" x2="${lx-3}" y2="${ly}" style="animation-delay:${d}ms"/>`;
+    out += `<text class="t-callout-text ${upc}" x="${lx}" y="${ly+3}" style="animation-delay:${d+160}ms">${'①②③④⑤⑥'[i]||'·'} ${m.u.id} · ${dirOf(m.u.stack)}</text>`;
+  });
+  g.innerHTML = out;
+  void g.getBoundingClientRect(); // flush initial bracket transforms so the converge transition runs
+  setTimeout(()=>{ g.querySelectorAll('.rt').forEach(p=>p.classList.add('lock')); }, 20);
+}
+
+/* ============ HUD RESULTS ============ */
+const AI_PREFIX = 'BEACON › ';
+let typeTimer=null;
+function typeLine(text){
+  const el=document.getElementById('aiLine');
+  clearTimeout(typeTimer);
+  if(REDUCED){ el.textContent = AI_PREFIX+text; return; }
+  el.innerHTML='';
+  const pre=document.createElement('span'); pre.textContent=AI_PREFIX; // prefix renders instantly
+  const span=document.createElement('span');
+  const caret=document.createElement('span'); caret.className='caret';
+  el.append(pre,span,caret);
+  let i=0;
+  (function step(){
+    if(i>=text.length) return;
+    span.textContent=text.slice(0,++i);
+    typeTimer=setTimeout(step, /[.,—]/.test(text[i-1])?55:10); // hold on punctuation
+  })();
+}
+const HDG={N:0,E:90,S:180,W:270};
+const dirOf=s=>s<=5?'N':s<=8?'E':s<=12?'S':'W';
+function routeFor(u){
+  const bank = u.stack<=8 ? 'A' : 'B';
+  const dir  = u.stack<=8 ? 'right' : 'left';
+  const floorsUp = u.floor-1, eta = Math.round((40+floorsUp*3)/30)*30;
+  const etaTxt = eta>=60?`~${Math.round(eta/60)} MIN`:`~${eta} SEC`;
+  return `${floorsUp} FLOORS UP · EST ${etaTxt} · ${dirOf(u.stack)} FACE<br>L1 LOBBY → ELEVATOR ${bank} → FLOOR ${u.floor} → ${dir.toUpperCase()} OFF ELEVATOR → RESIDENCE ${u.id}`;
+}
+function buildCompass(){
+  const tape=document.getElementById('cTape'); if(!tape) return;
+  const LBL=['N','NE','E','SE','S','SW','W','NW']; let h='';
+  for(let deg=-180;deg<=540;deg+=15){
+    const x=(deg+180)*2, major=deg%45===0;
+    h+=`<span class="c-tick ${major?'major':''}" style="left:${x}px"></span>`;
+    if(major){ const d=((deg%360)+360)%360;
+      h+=`<span class="c-lbl ${d===0?'n':''}" style="left:${x}px">${LBL[d/45]}</span>`; }
+  }
+  tape.innerHTML=h;
+}
+function setHeading(deg){
+  const tape=document.getElementById('cTape'); if(!tape) return;
+  tape.style.transform=`translateX(${-(deg+180)*2}px)`;
+  document.getElementById('cHdg').textContent='HDG '+String(deg).padStart(3,'0');
+}
+function cardHTML(m,i,up,d){
+  const u=m.u;
+  const delay = (i===0&&!up) ? `animation-delay:${d}ms,${d+200}ms` : `animation-delay:${d}ms`;
+  return `<button class="r-card ${i===0&&!up?'top':''} ${up?'upcoming':''}" style="${delay}" data-unit="${u.id}" aria-label="Residence ${u.id} details">
+    <span class="r-row1"><span class="r-rank">${up?'SOON':('①②③④⑤⑥'[i]||'·')}</span>
+      <span class="r-unit">${u.id}</span><span class="r-plan">${u.name}</span>
+      <span class="r-rent num">${fmt$(u.rent)}</span></span>
+    <span class="r-row2 num"><span>${u.beds===0?'STUDIO':u.beds+' BD'} / ${u.baths} BA</span>
+      <span>${u.sqft.toLocaleString()} SF</span><span>FL ${u.floor}</span>
+      <span class="r-avail">${availText(u)}</span></span>
+    ${m.why.length?`<span class="r-why">${m.why.slice(0,3).join(' · ')}</span>`:''}
+    <span class="r-match"><span class="r-bar"><i style="--sx:${m.score/100};animation-delay:${d+120}ms"></i></span>
+      <span class="r-pct num" data-score="${m.score}">0% fit</span>
+      <span class="r-guide">Guide</span></span>
+    <span class="r-route">${routeFor(u)}</span>
+  </button>`;
+}
+function renderResults({req, now, soon}){
+  const box=document.getElementById('results');
+  document.getElementById('fhNote').classList.toggle('show', req.fhFlag);
+  if(!now.length && !soon.length){
+    box.innerHTML = `<div class="no-results">No exact matches in inventory.<br>Try widening budget or floor — or check ON NOTICE units in the Ops Console.</div>`;
+    drawCallouts([]); typeLine('No exact match. Nearest alternatives are in the ops console.');
+    return;
+  }
+  box.innerHTML = now.map((m,i)=>cardHTML(m,i,false,i*55)).join('') +
+    (soon.length?`<p class="eyebrow" style="margin:6px 0 0;animation:bootFade 240ms var(--e-out) ${now.length*55}ms both">Coming available</p>`
+      +soon.map((m,i)=>cardHTML(m,i,true,(now.length+i)*55+40)).join(''):'');
+  box.querySelectorAll('.r-pct').forEach((el,idx)=>
+    addJob(el,0,+el.dataset.score,600,idx*55+120,v=>Math.round(v)+'% fit'));
+  drawCallouts([...now,...soon]);
+  const best=now[0]||soon[0];
+  setHeading(HDG[dirOf(best.u.stack)]);
+  const parts=[];
+  if(now.length) parts.push(`${now.length} match${now.length>1?'es':''} ready or in turn`);
+  if(soon.length) parts.push(`${soon.length} coming up`);
+  typeLine(`${parts.join(', ')}. Best fit: Residence ${best.u.id} — ${best.u.name.replace(/^\w+ /,'')}, floor ${best.u.floor}, ${availText(best.u).toLowerCase()}.`);
+  box.querySelectorAll('.r-card').forEach(c=>{
+    c.addEventListener('click',()=>c.classList.toggle('routed'));
+  });
+}
+function ask(q){
+  document.getElementById('qinput').value=q;
+  if(REDUCED){ renderResults(runMatch(q)); return; }
+  const scan=document.getElementById('scanline');
+  if(scan){ scan.classList.remove('run','ambient'); void scan.getBoundingClientRect(); scan.classList.add('run'); }
+  // wake flash tracks the scan edge down the tower (U3)
+  const rows=FLOORS.length;
+  document.querySelectorAll('.t-cell.vacant,.t-cell.turn,.t-cell.notice').forEach(c=>{
+    const ri=Math.round((+c.getAttribute('y')-TY)/(CELL_H+GAP));
+    setTimeout(()=>{ c.classList.add('wake'); setTimeout(()=>c.classList.remove('wake'),420); },(ri/rows)*900);
+  });
+  // skeleton while acquiring — never show stale results (U6)
+  document.getElementById('results').innerHTML =
+    `<div class="skel-cap">Scanning 299 units…</div>` + `<div class="skel"></div>`.repeat(3);
+  document.getElementById('callouts').innerHTML='';
+  document.querySelectorAll('.t-cell.hit').forEach(c=>c.classList.remove('hit','upcoming'));
+  clearTimeout(ask._t);
+  ask._t = setTimeout(()=>renderResults(runMatch(q)), 880);
+}
+
+/* ============ OPS ============ */
+function renderKPIs(){
+  const total=UNITS.length;
+  const vacant=UNITS.filter(u=>u.status==='vacant'), turn=UNITS.filter(u=>u.status==='turn'),
+        notice=UNITS.filter(u=>u.status==='notice');
+  const leased=total-vacant.length-turn.length;
+  const occ = (leased/total*100).toFixed(1);
+  const exposure = [...vacant,...turn].reduce((a,u)=>a+u.rent,0);
+  const items=[
+    {t:'Occupancy', v:occ+'%', s:leased+' of '+total+' leased', cls:'good'},
+    {t:'Vacant · ready', v:vacant.length, s:'avg '+Math.round(vacant.reduce((a,u)=>a+u.days,0)/vacant.length)+' days on market', cls:'good'},
+    {t:'In turn', v:turn.length, s:'all ready by Aug 15', cls:''},
+    {t:'On notice · 60d', v:notice.length, s:'next: 1713 on Aug 30', cls:'warn'},
+    {t:'Monthly exposure', v:fmt$(exposure), s:'rent value of empty units', cls:'warn'},
+    {t:'Avg days-to-lease', v:'23', s:'trailing 90 days', cls:''},
+  ];
+  document.getElementById('kpis').innerHTML = items.map(k=>
+    `<div class="kpi panel ${k.cls}"><div class="eyebrow">${k.t}</div><div class="v num">${k.v}</div><div class="s">${k.s}</div></div>`).join('');
+}
+function animateKPIs(){ // count-up on first Ops open (U9)
+  document.querySelectorAll('.kpi .v').forEach((el,i)=>{
+    const raw=el.textContent, num=parseFloat(raw.replace(/[$,%]/g,'').replace(/,/g,''));
+    if(isNaN(num)) return;
+    const fmt = raw.includes('%') ? v=>v.toFixed(1)+'%'
+              : raw.includes('$') ? v=>fmt$(Math.round(v))
+              : v=>String(Math.round(v));
+    addJob(el,0,num,700,i*60,fmt);
+  });
+}
+function cascadeFeed(){
+  if(REDUCED) return;
+  document.querySelectorAll('#feed .f-item').forEach((it,i)=>{
+    it.style.animation=`riseIn 240ms var(--e-out) ${i*50}ms both`;
+  });
+}
+function renderStackplan(){
+  const el=document.getElementById('stackplan');
+  let html=`<div class="sp-stacklabels">${Array.from({length:STACKS},(_,i)=>i+1).map(s=>`<span>${STACK_PLAN[s]}</span>`).join('')}</div>`;
+  for(const f of FLOORS){
+    html+=`<div class="sp-row"><span class="sp-floor num">${f}</span>`;
+    for(let s=1;s<=STACKS;s++){
+      if(f===AMENITY_FLOOR && s===1){ html+=`<span class="sp-cell amenity" title="L5 amenity deck — pool, fitness, dog run">DECK</span>`; continue; }
+      const u=byId[`${f}${String(s).padStart(2,'0')}`];
+      const cls=u.status==='occupied'?'':u.status;
+      html+=`<button class="sp-cell ${cls}" data-unit="${u.id}" aria-label="Unit ${u.id}, ${availText(u)}">${u.id}</button>`;
+    }
+    html+='</div>';
+  }
+  el.innerHTML=html;
+  const tip=document.getElementById('tooltip');
+  el.querySelectorAll('.sp-cell').forEach(c=>{
+    const u=byId[c.dataset.unit];
+    if(!u) return; // amenity deck cell
+    let tipTimer=null;
+    c.addEventListener('mouseenter',()=>{ tipTimer=setTimeout(()=>tip.classList.add('show'),40); }); // hover intent (U17)
+    c.addEventListener('mousemove',e=>{
+      tip.innerHTML=`<b>${u.id}</b> · ${u.name}<br><span class="tt-dim">${availText(u)} · ${fmt$(u.rent)}</span>`;
+      tip.style.left=Math.min(e.clientX+14, innerWidth-190)+'px';
+      tip.style.top=(e.clientY+14)+'px';
+    });
+    c.addEventListener('mouseleave',()=>{ clearTimeout(tipTimer); tip.classList.remove('show'); });
+    c.addEventListener('click',()=>selectUnit(u.id));
+  });
+}
+function selectUnit(id){
+  const u=byId[id];
+  document.querySelectorAll('.sp-cell.selected').forEach(c=>c.classList.remove('selected'));
+  const cell=document.querySelector(`.sp-cell[data-unit="${id}"]`); if(cell) cell.classList.add('selected');
+  const rows=[
+    ['Floor plan',u.name],['Layout',(u.beds===0?'Studio':u.beds+' bed')+' / '+u.baths+' bath'],
+    ['Area',u.sqft.toLocaleString()+' sq ft'],['Market rent',fmt$(u.rent)+' / mo'],
+    ['Exposure',u.view],['Status',availText(u)],
+  ];
+  if(u.status==='vacant') rows.push(['Days on market',u.days+' days'],['Daily carry cost',fmt$(Math.round(u.rent/30))+' / day']);
+  document.getElementById('detail').innerHTML =
+    `<h4>Unit detail</h4><h3>RESIDENCE ${u.id}</h3>
+     <span class="d-status ${u.status}">${availText(u)}</span>
+     <div class="d-rows">${rows.map(r=>`<div class="d-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>
+     ${u.status!=='occupied'&&u.status!=='model'?`<button class="d-send" id="sendHud">Send to agent HUD →</button>`:''}`;
+  const btn=document.getElementById('sendHud');
+  if(btn) btn.addEventListener('click',()=>{
+    switchScreen('hud');
+    const label = u.beds===0?'studio':u.beds===1?'one bedroom':'two bedroom';
+    const inp=document.getElementById('qinput'); // input visibly receives the handoff (U16)
+    inp.classList.add('flash');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>inp.classList.remove('flash')));
+    ask(`${label} on floor ${u.floor}`);
+  });
+}
+const FEED=[
+  ['g','Tour booked — 2 BD, prospect “J. Okafor”, tomorrow 10:30a','2m'],
+  ['b','Turn complete: 1610 passed inspection — READY moved up to Aug 5','18m'],
+  ['a','Notice submitted: 1713 (1x1G) — available Aug 30, pre-marketing on','1h'],
+  ['g','Application received — Residence 2309, screening in progress','2h'],
+  ['g','BEACON matched 6 tours to units today · avg 41s to first match','4h'],
+  ['a','Renewal declined: 1907 — added to 60-day pipeline','6h'],
+  ['b','PMS sync OK — 299 units reconciled, 0 conflicts','6h'],
+];
+function renderFeed(){
+  document.getElementById('feed').innerHTML = FEED.map(f=>
+    `<div class="f-item"><span class="f-dot ${f[0]}"></span><span>${f[1]}</span><span class="f-time num">${f[2]}</span></div>`).join('');
+}
+
+/* ============ SHELL ============ */
+function moveIndicator(name){
+  const ind=document.getElementById('tabIndicator');
+  const tab=document.querySelector(`.tab[data-screen="${name}"]`);
+  if(ind&&tab){ ind.style.left=tab.offsetLeft+'px'; ind.style.width=tab.offsetWidth+'px'; }
+}
+function switchScreen(name){
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected', String(t.dataset.screen===name)));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.id==='screen-'+name));
+  moveIndicator(name);
+  if(name==='ops' && !switchScreen._opsSeen){ switchScreen._opsSeen=true; animateKPIs(); cascadeFeed(); }
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchScreen(t.dataset.screen)));
+
+const CHIPS=[
+  'Two bedroom, top floor',
+  'One bed — we have a dog',
+  'Cheapest studio, move in ASAP',
+  'Hollywood Sign view under $3,500',
+  'Penthouse with a den, no kids around',
+];
+document.getElementById('chips').innerHTML = CHIPS.map(c=>`<button class="chip">“${c}”</button>`).join('');
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>ask(c.textContent.replace(/[“”]/g,''))));
+document.getElementById('qgo').addEventListener('click',()=>{ const v=document.getElementById('qinput').value.trim(); if(v) ask(v); });
+document.getElementById('qinput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ const v=e.target.value.trim(); if(v) ask(v); }});
+
+document.getElementById('hudStage').innerHTML =
+  `<div class="compass" aria-hidden="true"><div class="c-tape" id="cTape"></div><div class="c-caret"></div><span class="c-hdg" id="cHdg">HDG 000</span></div>` + towerSVG();
+buildCompass(); setHeading(0);
+renderKPIs(); renderStackplan(); renderFeed(); selectUnit('2402');
+
+function tick(){ const d=new Date();
+  document.getElementById('clock').textContent = d.toLocaleTimeString('en-US',{hour12:false}); }
+tick(); setInterval(tick,1000);
+
+moveIndicator('hud');
+addEventListener('resize',()=>{
+  const active=document.querySelector('.tab[aria-selected="true"]');
+  if(active) moveIndicator(active.dataset.screen);
+});
+
+// ambient sustain: 30s low-opacity scan pass + sync-dot brighten (U15)
+setInterval(()=>{
+  if(document.hidden||REDUCED) return;
+  if(!document.getElementById('screen-hud').classList.contains('active')) return;
+  const scan=document.getElementById('scanline');
+  if(scan && !scan.classList.contains('run')){
+    scan.classList.remove('ambient'); void scan.getBoundingClientRect(); scan.classList.add('ambient');
+  }
+  const dot=document.querySelector('.live .dot');
+  if(dot){ dot.style.filter='brightness(1.6)'; setTimeout(()=>dot.style.filter='',300); }
+  const clock=document.getElementById('clock');
+  if(clock){ clock.style.color='var(--ready-glow)'; setTimeout(()=>clock.style.color='',300); }
+},30000);
+
+// live ops feed: simulated arrivals keep the console breathing (U14)
+const LIVE_POOL=[
+  ['g','Tour completed — Residence 2402 shown, follow-up queued'],
+  ['b','Quote generated: 1804 — 12-mo, $2,590 effective'],
+  ['a','Maintenance flagged: 1610 — punch-list item added'],
+  ['g','Guest card — 2 BD, budget $4.2K, auto-matched to 2309'],
+];
+let liveIdx=0;
+setInterval(()=>{
+  if(document.hidden||REDUCED) return;
+  const f=LIVE_POOL[liveIdx++%LIVE_POOL.length];
+  const feed=document.getElementById('feed');
+  const div=document.createElement('div'); div.className='f-item f-new';
+  div.innerHTML=`<span class="f-dot ${f[0]}"></span><span>${f[1]}</span><span class="f-time num">now</span>`;
+  feed.prepend(div);
+  setTimeout(()=>div.classList.remove('f-new'),1300);
+  while(feed.children.length>9) feed.lastElementChild.remove();
+},40000);
+
+typeLine('Standing by. Ask for what the prospect wants.');
+setTimeout(()=>ask(CHIPS[0]), REDUCED?400:1400); // boot settles, then auto-demo (U1)
+</script>
