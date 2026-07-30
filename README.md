@@ -12,6 +12,7 @@ HUD design language modeled on Anduril's **EagleEye** (compass tape, lock-on ret
 | [SALES-SCRIPT.md](SALES-SCRIPT.md) | Word-for-word 15-minute pitch with demo beats, objection handling, pilot close, sourced stat card, follow-up email. |
 | [GTM-ACTION-PLAN.md](GTM-ACTION-PLAN.md) | Positioning, competitive map, pricing, ICP, PMS sequencing, 30/60/90 plan, pilot KPIs, risks. |
 | [ANIMATION-STUDY.md](ANIMATION-STUDY.md) | The motion-design dossier: teardown of luminahollywood.com (jQuery template, stock fades — beatable), market study, and the 18-item upgrade spec this demo implements. |
+| [RESEARCH-PAPER.md](RESEARCH-PAPER.md) | Working paper: adapting tactical HUD paradigms (Anduril EagleEye) to multifamily leasing on consumer AR glasses — system design, evaluation, limitations, ethics, references. |
 
 ## Demo in 60 seconds
 1. Open `index.html` → boot sequence runs, then auto-demos "Two bedroom, top floor" → **2402** locks on.
