@@ -260,6 +260,28 @@
   @keyframes feedNew{from{max-height:0;opacity:0}to{max-height:48px;opacity:1}}
   @keyframes feedGlow{from{background:rgba(83,230,196,.08)}to{background:transparent}}
   .tooltip .tt-dim{color:var(--ink-2)}
+
+  /* ---------- IRIS guided tour ---------- */
+  #tourSpot{position:fixed;z-index:300;border:1px solid var(--ready-glow);border-radius:8px;
+    box-shadow:0 0 0 9999px rgba(4,8,10,.78),0 0 24px rgba(83,230,196,.35);
+    pointer-events:none;transition:left 380ms var(--e-inout),top 380ms var(--e-inout),width 380ms var(--e-inout),height 380ms var(--e-inout);display:none}
+  #tourCard{position:fixed;z-index:301;left:50%;transform:translateX(-50%);bottom:26px;width:min(560px,92vw);
+    background:#0C1218;border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:none;
+    box-shadow:0 12px 40px rgba(0,0,0,.65)}
+  .tour-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ready-glow)}
+  .tour-body{margin-top:6px;font-size:14.5px;color:var(--ink);line-height:1.55}
+  .tour-foot{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .tour-dots{display:flex;gap:5px}
+  .tour-dot{width:6px;height:6px;border-radius:50%;background:var(--line)}
+  .tour-dot.on{background:var(--ready-glow)}
+  .tour-voice{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--ink-3);text-transform:uppercase}
+  .tour-voice.on{color:var(--ready-glow)}
+  .t-next{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--bg);background:var(--ready-glow);border-radius:5px;padding:7px 14px;font-weight:700}
+  .t-skip{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--ink-2);border:1px solid var(--line);border-radius:5px;padding:6px 12px}
+  .t-skip:hover{color:var(--ink);border-color:var(--ink-3)}
+  @media (prefers-reduced-motion:reduce){#tourSpot{transition:none}}
 </style>
 
 <header class="topbar">
@@ -390,6 +412,8 @@
 </footer>
 
 <div class="tooltip" id="tooltip"></div>
+<div id="tourSpot" aria-hidden="true"></div>
+<div id="tourCard" role="dialog" aria-label="Guided tour"></div>
 
 <script>
 'use strict';
@@ -862,6 +886,8 @@ const CHIPS=[
 ];
 document.getElementById('chips').innerHTML = CHIPS.map(c=>`<button class="chip">“${c}”</button>`).join('');
 document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>ask(c.textContent.replace(/[“”]/g,''))));
+document.getElementById('chips').insertAdjacentHTML('beforeend','<button class="chip" id="tourChip" style="color:var(--ready-glow);border-color:rgba(83,230,196,.4)">▸ Guided tour</button>');
+document.getElementById('tourChip').addEventListener('click',()=>startTour());
 document.getElementById('qgo').addEventListener('click',()=>{ const v=document.getElementById('qinput').value.trim(); if(v) ask(v); });
 document.getElementById('qinput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ const v=e.target.value.trim(); if(v) ask(v); }});
 
@@ -914,5 +940,89 @@ setInterval(()=>{
 },40000);
 
 typeLine('Standing by. Ask for what the prospect wants.');
-setTimeout(()=>ask(CHIPS[0]), REDUCED?400:1400); // boot settles, then auto-demo (U1)
+
+/* ============ IRIS GUIDED TOUR ============ */
+// Voice-narrated walkthrough. Auto-plays on launch; Esc or SKIP exits; the
+// "Guided tour" chip replays. Voice = built-in Web Speech API (no network,
+// CSP-safe); browsers gate audio behind a first gesture, so the visual tour
+// never depends on it.
+const TOUR=[
+  {t:'Iris online', screen:'hud', body:'This is BEACON — spatial leasing intelligence, mapped to Lumina Hollywood’s real tower. I’m Iris, your guide. Watch how a tour starts.', target:'.brand', dur:7000},
+  {t:'The ask', screen:'hud', body:'A prospect says what they want. Two bedroom, top floor. That’s all BEACON needs.', target:'.querybar', pre:()=>ask('Two bedroom, top floor'), dur:6500},
+  {t:'Lock-on', screen:'hud', body:'BEACON sweeps all 299 homes and locks onto every match — reticle, ping, and the compass swings to its face of the building.', target:'#hudStage', spotDelay:1000, dur:8000},
+  {t:'Ranked, with why', screen:'hud', body:'Matches arrive ranked, with the reasons spelled out — floor, view, availability. The best fit charges up first.', target:'#results', dur:7000},
+  {t:'Fair Housing Guard', screen:'hud', body:'If a prospect mentions something the law protects, BEACON refuses to use it — visibly. Matching stays on unit criteria only.', target:'#fhNote', pre:()=>ask('Penthouse with a den, no kids around'), spotDelay:1100, dur:8000},
+  {t:'The ops picture', screen:'ops', body:'The manager sees the whole building live — every vacancy, turn, and notice, with exposure in dollars instead of unit counts.', target:'#kpis', pre:()=>switchScreen('ops'), dur:7500},
+  {t:'Send to the lens', screen:'ops', body:'One tap sends any residence straight to the agent’s eyes. On Meta Ray-Ban Display, this card renders inside the lens.', target:'#detail', pre:()=>selectUnit('2402'), dur:7500},
+  {t:'Your turn', screen:'hud', body:'Demo complete. Take the keyboard — type what your last prospect asked for, and BEACON will find it.', target:'.querybar', pre:()=>switchScreen('hud'), dur:6000},
+];
+const tour={i:-1,timer:null,active:false,voiceUnlocked:false};
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.rate=1.03;
+    const vs=speechSynthesis.getVoices();
+    const v=vs.find(x=>/Samantha|Ava|Allison|Google US English|Zira/i.test(x.name))||vs.find(x=>(x.lang||'').startsWith('en'));
+    if(v) u.voice=v;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function positionSpot(sel){
+  const spot=document.getElementById('tourSpot'), el=document.querySelector(sel);
+  if(!el){ spot.style.display='none'; return; }
+  const r=el.getBoundingClientRect();
+  if(r.width===0&&r.height===0){ spot.style.display='none'; return; }
+  spot.style.display='block';
+  spot.style.left=(r.left-8)+'px'; spot.style.top=(r.top-8)+'px';
+  spot.style.width=(r.width+16)+'px'; spot.style.height=(r.height+16)+'px';
+}
+function tourStep(i){
+  clearTimeout(tour.timer);
+  if(i>=TOUR.length){ endTour(); return; }
+  tour.i=i; tour.active=true;
+  const s=TOUR[i];
+  if(s.screen) switchScreen(s.screen);
+  if(s.pre) s.pre();
+  setTimeout(()=>positionSpot(s.target), s.spotDelay||60);
+  const card=document.getElementById('tourCard');
+  card.style.display='block';
+  card.innerHTML=`
+    <div class="tour-eyebrow">Iris · step ${i+1} of ${TOUR.length} — ${s.t}</div>
+    <div class="tour-body">${s.body}</div>
+    <div class="tour-foot">
+      <span class="tour-dots">${TOUR.map((_,j)=>`<span class="tour-dot ${j<=i?'on':''}"></span>`).join('')}</span>
+      <span class="tour-voice ${tour.voiceUnlocked?'on':''}" id="tourVoice">${tour.voiceUnlocked?'\u{1F50A} voice on':'\u{1F50A} click anywhere for voice'}</span>
+      <button class="t-skip" id="tourSkip">Skip</button>
+      <button class="t-next" id="tourNext">${i===TOUR.length-1?'Finish':'Next ▸'}</button>
+    </div>`;
+  document.getElementById('tourNext').addEventListener('click',()=>tourStep(i+1));
+  document.getElementById('tourSkip').addEventListener('click',endTour);
+  speak(s.body);
+  tour.timer=setTimeout(()=>tourStep(i+1), s.dur);
+}
+function startTour(){ tourStep(0); }
+function endTour(){
+  clearTimeout(tour.timer); tour.active=false; tour.i=-1;
+  document.getElementById('tourSpot').style.display='none';
+  document.getElementById('tourCard').style.display='none';
+  try{ speechSynthesis.cancel(); }catch(e){}
+}
+addEventListener('keydown',e=>{
+  if(!tour.active) return;
+  if(e.key==='Escape'){ endTour(); e.preventDefault(); }
+  else if(e.key==='ArrowRight' && e.target.tagName!=='INPUT'){ tourStep(tour.i+1); e.preventDefault(); }
+});
+addEventListener('pointerdown',()=>{
+  if(!tour.voiceUnlocked){
+    tour.voiceUnlocked=true;
+    const v=document.getElementById('tourVoice');
+    if(v){ v.classList.add('on'); v.textContent='\u{1F50A} voice on'; }
+    if(tour.active && 'speechSynthesis' in window && !speechSynthesis.speaking) speak(TOUR[tour.i].body);
+  }
+},{capture:true});
+addEventListener('resize',()=>{ if(tour.active) positionSpot(TOUR[tour.i].target); });
+
+setTimeout(startTour, REDUCED?600:1600); // auto-play the guided tour on launch
 </script>

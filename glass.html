@@ -96,6 +96,18 @@
   .hints{position:absolute;bottom:20px;left:24px;right:24px;display:flex;gap:22px;font-size:12px;letter-spacing:.14em;color:var(--dim)}
   .hints b{color:var(--ink);font-weight:400}
   .hints .sync{margin-left:auto;color:var(--teal)}
+  .hints.flash span{color:var(--teal)}
+  /* first-launch gesture tutorial — dark-gray veil (never pure black: that
+     renders transparent in-lens and the tutorial would float over the lobby) */
+  .tut{position:absolute;inset:0;background:rgba(10,16,20,.92);display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;z-index:50;text-align:center}
+  .tut.show{display:flex}
+  .tut .big{font-size:46px;color:var(--teal);letter-spacing:.12em;font-weight:700}
+  .tut .msg{font-size:21px;color:var(--ink);letter-spacing:.08em;line-height:1.45;max-width:480px}
+  .tut .sub{font-size:12px;color:var(--dim);letter-spacing:.22em}
+  .tut .dots{display:flex;gap:8px}
+  .tut .dots i{width:8px;height:8px;border-radius:50%;background:#1E2E2A}
+  .tut .dots i.on{background:var(--teal)}
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms !important;animation-delay:0ms !important;transition-duration:.01ms !important}
     .g-ping{animation:none;opacity:0}
@@ -122,6 +134,8 @@
 <div class="fh" id="fh">FAIR HOUSING GUARD — protected criteria ignored. Matching on unit attributes only.</div>
 
 <div class="team">TEAM ▸ CHEN <b>L1 LOBBY</b> · POOLE <b>FL 9 TOURING</b> · REYES <b>YOU</b></div>
+
+<div class="tut" id="tut" aria-live="polite"></div>
 
 <div class="bar hints">
   <span><b>◀▶</b> REQUEST</span><span><b>▲▼</b> UNIT</span><span><b>⏎</b> ROUTE</span>
@@ -284,6 +298,7 @@ function render(reqChanged){
   card.style.display=routeOn?'none':'flex';
 }
 addEventListener('keydown',e=>{
+  if(tutActive()){ e.preventDefault(); endTut(); return; } // any gesture skips the tutorial
   let reqChanged=false;
   if(e.key==='ArrowRight'){ri=(ri+1)%REQS.length;ui=0;routeOn=false;reqChanged=true}
   else if(e.key==='ArrowLeft'){ri=(ri-1+REQS.length)%REQS.length;ui=0;routeOn=false;reqChanged=true}
@@ -294,6 +309,44 @@ addEventListener('keydown',e=>{
   else return;
   e.preventDefault();render(reqChanged);
 });
+
+/* ---- first-launch gesture tutorial (auto-plays; any gesture skips) ---- */
+const TUT=[
+  ['◀ ▶','SWIPE LEFT / RIGHT','SWITCH PROSPECT REQUEST'],
+  ['▲ ▼','SWIPE UP / DOWN','CYCLE RANKED MATCHES'],
+  ['⏎','PINCH TO SELECT','ROUTE TO THE RESIDENCE'],
+  ['⎋','MIDDLE-FINGER PINCH','BACK · SYSTEM MENU'],
+];
+let tutTimer=null;
+function tutActive(){ return document.getElementById('tut').classList.contains('show'); }
+function tutStep(i){
+  const el=document.getElementById('tut');
+  if(i>=TUT.length){ endTut(); return; }
+  const [g,a,b]=TUT[i];
+  el.innerHTML=`<div class="sub">BEACON · HOW TO DRIVE</div><div class="big">${g}</div>
+    <div class="msg">${a}</div><div class="sub">${b}</div>
+    <div class="dots">${TUT.map((_,j)=>`<i class="${j<=i?'on':''}"></i>`).join('')}</div>
+    <div class="sub" style="opacity:.7">ANY GESTURE SKIPS</div>`;
+  el.classList.add('show');
+  // voice guidance where the runtime allows it — undocumented on-glasses, so
+  // purely best-effort; the visual tutorial never depends on it
+  try{ if('speechSynthesis' in window){ speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance((a+', to '+b).toLowerCase()); u.rate=1.05; speechSynthesis.speak(u); } }catch(e){}
+  tutTimer=setTimeout(()=>tutStep(i+1), REDUCED?1200:3400);
+}
+function endTut(){
+  clearTimeout(tutTimer);
+  document.getElementById('tut').classList.remove('show');
+  try{ localStorage.setItem('bg_tut_seen','1'); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){}
+}
 buildCompass();
 render(false);
+let seenTut=false; try{ seenTut=!!localStorage.getItem('bg_tut_seen'); }catch(e){}
+if(new URLSearchParams(location.search).has('tour') || !seenTut){
+  setTimeout(()=>tutStep(0), 500);           // auto-play the tutorial on launch
+}else{
+  const h=document.querySelector('.hints');  // returning user: quick gesture-hint flash
+  h.classList.add('flash'); setTimeout(()=>h.classList.remove('flash'), 1800);
+}
 </script>
