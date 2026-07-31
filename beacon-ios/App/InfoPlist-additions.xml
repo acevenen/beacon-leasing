@@ -1,0 +1,53 @@
+<!-- Info.plist additions for the BEACON DAT iOS app.
+     Merge into the Xcode app target's Info.plist.
+     GOTCHA: if Info.plist preprocessing is on, add -traditional-cpp to
+     "Info.plist Other Preprocessor Flags" or the :// in AppLinkURLScheme
+     gets mangled by the C preprocessor. -->
+
+<!-- URL scheme Meta AI calls back on after registration -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleTypeRole</key>
+    <string>Editor</string>
+    <key>CFBundleURLName</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>beaconglass</string>
+    </array>
+  </dict>
+</array>
+
+<!-- Lets the SDK detect + open the Meta AI app -->
+<key>LSApplicationQueriesSchemes</key>
+<array>
+  <string>fb-viewapp</string>
+</array>
+
+<!-- Glasses accessory protocol + background modes -->
+<key>UISupportedExternalAccessoryProtocols</key>
+<array>
+  <string>com.meta.ar.wearable</string>
+</array>
+<key>UIBackgroundModes</key>
+<array>
+  <string>bluetooth-peripheral</string>
+  <string>external-accessory</string>
+</array>
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>BEACON connects to your Meta glasses to show live unit matches.</string>
+
+<!-- DAT configuration. MetaAppID 0 = Developer Mode (no Wearables Developer
+     Center project needed). For production, replace with the APPLICATION_ID
+     and CLIENT_TOKEN from wearables.developer.meta.com after org/project setup.
+     DAMEnabled must be true for Display (in-lens rendering) apps. -->
+<key>MWDAT</key>
+<dict>
+  <key>AppLinkURLScheme</key>
+  <string>beaconglass://</string>
+  <key>MetaAppID</key>
+  <string>0</string>
+  <key>DAMEnabled</key>
+  <true/>
+</dict>
